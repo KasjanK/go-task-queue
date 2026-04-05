@@ -1,6 +1,7 @@
 package broker
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 
@@ -28,6 +29,7 @@ func NewBroker() *Broker {
 				Payload: map[string]any{
 					"to": "test@example.com",
 				},
+				Status: "pending",
 			},
 		},
 	}
@@ -61,4 +63,18 @@ func (b *Broker) Enqueue(job Job) Job {
 	b.jobs = append(b.jobs, job)
 	
 	return job
+}
+
+func (b *Broker) Dequeue() (Job, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	for i := range b.jobs {
+		if b.jobs[i].Status == "pending" {
+			b.jobs[i].Status = "in-progress"
+			return b.jobs[i], nil
+		}
+	}
+
+	return Job{}, errors.New("no jobs pending")
 }

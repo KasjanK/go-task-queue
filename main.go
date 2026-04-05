@@ -18,6 +18,7 @@ func main() {
 	r.GET("/jobs", server.GetJobs)
 	r.GET("/jobs/:id", server.GetJobByID)
 	r.POST("/jobs", server.PostJob)
+	r.POST("/jobs/dequeue", server.DequeueJob)
 
 	if err := r.Run(); err != nil {
 		log.Fatalf("failed to run server: %v", err)

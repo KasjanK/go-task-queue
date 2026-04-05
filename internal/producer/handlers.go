@@ -43,3 +43,13 @@ func (s *Server) PostJob(c *gin.Context) {
 	createdJob := s.Broker.Enqueue(newJob)	
 	c.IndentedJSON(http.StatusCreated, createdJob)
 }
+
+func (s *Server) DequeueJob(c *gin.Context) {
+	job, err := s.Broker.Dequeue()
+	if err != nil {
+		c.IndentedJSON(http.StatusNoContent, gin.H{"message": err.Error()})
+		return
+	}
+
+	c.IndentedJSON(http.StatusOK, job)
+}
