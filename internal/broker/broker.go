@@ -78,3 +78,31 @@ func (b *Broker) Dequeue() (Job, error) {
 
 	return Job{}, errors.New("no jobs pending")
 }
+
+func (b *Broker) CompleteJob(id string) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	for i := range b.jobs {
+        if b.jobs[i].ID == id {
+            b.jobs[i].Status = "completed"
+            return nil
+        }
+    }
+
+	return fmt.Errorf("job not found")
+}
+
+func (b *Broker) FailJob(id string) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	for i := range b.jobs {
+		if b.jobs[i].ID == id {
+			b.jobs[i].Status = "failed"
+			return nil
+		}
+	}
+
+	return fmt.Errorf("job not found")
+}

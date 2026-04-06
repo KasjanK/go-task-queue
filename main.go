@@ -5,6 +5,7 @@ import (
 
 	"github.com/KasjanK/go-task-queue/internal/broker"
 	"github.com/KasjanK/go-task-queue/internal/producer"
+	"github.com/KasjanK/go-task-queue/internal/worker"
 	"github.com/gin-gonic/gin"
 )
 
@@ -12,6 +13,13 @@ import (
 func main() {
 	broker := broker.NewBroker()
 	server := producer.NewServer(broker)
+	w := worker.NewWorker(broker)
+	w1 := worker.NewWorker(broker)
+	w2 := worker.NewWorker(broker)
+
+	go w.Run(broker)
+	go w1.Run(broker)
+	go w2.Run(broker)
 
 	r := gin.Default()
 
