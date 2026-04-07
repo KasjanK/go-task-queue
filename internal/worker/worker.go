@@ -35,9 +35,10 @@ func (w *Worker) Run(b *broker.Broker) error {
 
 		switch job.Type {
 		case "email":
+			fmt.Printf("worker %v trying job %v. try nr: %v\n", w.ID, job.ID, job.RetryCount)
 			err := w.SendEmail(job.Payload)
 			if err != nil {
-			//	w.Broker.FailJob(job.ID) 	 // nack
+			    w.Broker.FailJob(job.ID) 	 // nack
 			} else {
 				w.Broker.CompleteJob(job.ID) // ack
 			}
@@ -49,11 +50,11 @@ func (w *Worker) Run(b *broker.Broker) error {
 }
 
 func (w *Worker) SendEmail(payload map[string]any) error {
-	to := payload["to"]
-	subject := payload["subject"]
-	body := payload["body"]
+	//to := payload["to"]
+	//subject := payload["subject"]
+	//body := payload["body"]
 
-	fmt.Printf("[WORKER ID: %v] Sending email to %v, Subject: %v, Body: %v\n", w.ID, to, subject, body)
+	//fmt.Printf("[WORKER ID: %v] Sending email to %v, Subject: %v, Body: %v\n", w.ID, to, subject, body)
 	time.Sleep(2 * time.Second)
-	return nil
+	return fmt.Errorf("No email address found")
 }

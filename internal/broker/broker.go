@@ -13,6 +13,8 @@ type Job struct {
     Type    string  		`json:"type"`
     Payload map[string]any  `json:"payload"`
 	Status  string 			`json:"status"`
+	MaxRetries int			`json:"max_retries"`
+	RetryCount int			`json:"retry_count"`
 }
 
 type Broker struct {
@@ -30,6 +32,28 @@ func NewBroker() *Broker {
 					"to": "test@example.com",
 				},
 				Status: "pending",
+				MaxRetries: 3,
+				RetryCount: 0,
+			},
+			{
+				ID:   "seed-2",
+				Type: "email",
+				Payload: map[string]any{
+					"to": "test@example.com",
+				},
+				Status: "pending",
+				MaxRetries: 3,
+				RetryCount: 0,
+			},
+			{
+				ID:   "seed-3",
+				Type: "email",
+				Payload: map[string]any{
+					"to": "test@example.com",
+				},
+				Status: "pending",
+				MaxRetries: 3,
+				RetryCount: 0,
 			},
 		},
 	}
@@ -60,6 +84,7 @@ func (b *Broker) Enqueue(job Job) Job {
 	
 	job.ID = uuid.New().String()
 	job.Status = "pending"
+	job.MaxRetries = 3
 	b.jobs = append(b.jobs, job)
 	
 	return job
@@ -99,7 +124,12 @@ func (b *Broker) FailJob(id string) error {
 
 	for i := range b.jobs {
 		if b.jobs[i].ID == id {
-			b.jobs[i].Status = "failed"
+			b.jobs[i].RetryCount++
+			if b.jobs[i].RetryCount < b.jobs[i].MaxRetries {
+				b.jobs[i].Status = "pending"
+			} else {
+				b.jobs[i].Status = "failed"
+			}
 			return nil
 		}
 	}
