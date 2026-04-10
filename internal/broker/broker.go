@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/google/uuid"
 )
 
 type Job struct {
@@ -82,7 +81,7 @@ func (b *Broker) Enqueue(job Job) Job {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	
-	job.ID = uuid.New().String()
+	// job.ID = uuid.New().String()
 	job.Status = "pending"
 	job.MaxRetries = 3
 	b.jobs = append(b.jobs, job)

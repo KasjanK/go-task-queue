@@ -50,11 +50,11 @@ func (w *Worker) Run(b *broker.Broker) error {
 }
 
 func (w *Worker) SendEmail(payload map[string]any) error {
-	//to := payload["to"]
-	//subject := payload["subject"]
-	//body := payload["body"]
+	to := payload["to"]
+	subject := payload["subject"]
+	body := payload["body"]
 
-	//fmt.Printf("[WORKER ID: %v] Sending email to %v, Subject: %v, Body: %v\n", w.ID, to, subject, body)
+	fmt.Printf("[WORKER ID: %v] Sending email to %v, Subject: %v, Body: %v\n", w.ID, to, subject, body)
 	time.Sleep(2 * time.Second)
-	return fmt.Errorf("No email address found")
+	return nil
 }
