@@ -11,7 +11,7 @@ import (
 func main() {
 	var wg sync.WaitGroup
 
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 1000; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -36,5 +36,5 @@ func main() {
 	}
 
 	wg.Wait()
-	fmt.Println("All 100 jobs have been sent")
+	fmt.Println("All 1000 jobs have been sent")
 }

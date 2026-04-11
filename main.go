@@ -9,6 +9,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// TODO:
+// - task performance, memory usage?, error rates
+// - make a separate slice with dead jobs
+// - schedule tasks
+// - dashboard, configuration, worker manager
+// - add real life things to show functionality
 
 func main() {
 	broker := broker.NewBroker()
@@ -25,6 +31,7 @@ func main() {
 
 	r.GET("/jobs", server.GetJobs)
 	r.GET("/jobs/:id", server.GetJobByID)
+	r.GET("/metrics", server.Metrics)
 	r.POST("/jobs", server.PostJob)
 	r.POST("/jobs/dequeue", server.DequeueJob)
 

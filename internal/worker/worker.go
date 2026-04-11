@@ -28,22 +28,19 @@ func (w *Worker) Run(b *broker.Broker) error {
 	for w.IsRunning {
 		job, err := w.Broker.Dequeue()
 		if err != nil {
-			fmt.Println("no jobs found, retrying in 2 seconds")
-			time.Sleep(2 * time.Second)
+			fmt.Println("no jobs found")
+			time.Sleep(1 * time.Second)
 			continue
 		}
 
 		switch job.Type {
 		case "email":
-			fmt.Printf("worker %v trying job %v. try nr: %v\n", w.ID, job.ID, job.RetryCount)
 			err := w.SendEmail(job.Payload)
 			if err != nil {
 			    w.Broker.FailJob(job.ID) 	 // nack
 			} else {
 				w.Broker.CompleteJob(job.ID) // ack
 			}
-		case "image-resizer":
-			// execute image func
 		}
 	}
 	return nil
@@ -55,6 +52,5 @@ func (w *Worker) SendEmail(payload map[string]any) error {
 	body := payload["body"]
 
 	fmt.Printf("[WORKER ID: %v] Sending email to %v, Subject: %v, Body: %v\n", w.ID, to, subject, body)
-	time.Sleep(2 * time.Second)
 	return nil
 }

@@ -53,3 +53,8 @@ func (s *Server) DequeueJob(c *gin.Context) {
 
 	c.IndentedJSON(http.StatusOK, job)
 }
+
+func (s *Server) Metrics(c *gin.Context) {
+	metrics := s.Broker.GetMetrics()
+	c.IndentedJSON(http.StatusOK, metrics)
+}
