@@ -32,6 +32,7 @@ func main() {
 	r.GET("/jobs", server.GetJobs)
 	r.GET("/jobs/:id", server.GetJobByID)
 	r.GET("/metrics", server.Metrics)
+	r.GET("/dlq", server.GetDLQ)
 	r.POST("/jobs", server.PostJob)
 	r.POST("/jobs/dequeue", server.DequeueJob)
 

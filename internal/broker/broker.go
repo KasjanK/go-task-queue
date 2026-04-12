@@ -24,17 +24,17 @@ type Job struct {
 
 type Broker struct {
 	mu 	sync.Mutex
-	jobs []Job
+	jobs []*Job
+	dlq  []*Job
 }
 
 func NewBroker() *Broker {
 	return &Broker{
-		jobs: []Job{
+		jobs: []*Job{
 			{
 				ID:   "seed-1",
 				Type: "email",
 				Payload: map[string]any{
-					"to": "test@example.com",
 				},
 				Status: "pending",
 				MaxRetries: 3,
@@ -45,7 +45,6 @@ func NewBroker() *Broker {
 				ID:   "seed-2",
 				Type: "email",
 				Payload: map[string]any{
-					"to": "test@example.com",
 				},
 				Status: "pending",
 				MaxRetries: 3,
@@ -56,7 +55,6 @@ func NewBroker() *Broker {
 				ID:   "seed-3",
 				Type: "email",
 				Payload: map[string]any{
-					"to": "test@example.com",
 				},
 				Status: "pending",
 				MaxRetries: 3,
@@ -67,23 +65,23 @@ func NewBroker() *Broker {
 	}
 }
 
-func (b *Broker) GetAllJobs() []Job {
+func (b *Broker) GetAllJobs() []*Job {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
 	return b.jobs
 }
 
-func (b *Broker) GetJob(id string) (Job, error) {
+func (b *Broker) GetJob(id string) (*Job, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	for _, j := range b.jobs {
-		if id == j.ID {
-			return j, nil
+	for _, job := range b.jobs {
+		if id == job.ID {
+			return job, nil
 		}
 	}
-	return Job{}, fmt.Errorf("Job not found")
+	return nil, fmt.Errorf("Job not found")
 }
 
 func (b *Broker) Enqueue(job Job) Job {
@@ -94,12 +92,14 @@ func (b *Broker) Enqueue(job Job) Job {
 	job.Status = "pending"
 	job.MaxRetries = 3
 	job.EnqueuedAt = time.Now()
-	b.jobs = append(b.jobs, job)
+
+	newJob := job
+	b.jobs = append(b.jobs, &newJob)
 	
 	return job
 }
 
-func (b *Broker) Dequeue() (Job, error) {
+func (b *Broker) Dequeue() (*Job, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -111,7 +111,7 @@ func (b *Broker) Dequeue() (Job, error) {
 		}
 	}
 
-	return Job{}, errors.New("no jobs pending")
+	return nil, errors.New("no jobs pending")
 }
 
 func (b *Broker) CompleteJob(id string) error {
@@ -137,11 +137,17 @@ func (b *Broker) FailJob(id string) error {
 	for i := range b.jobs {
 		if b.jobs[i].ID == id {
 			b.jobs[i].RetryCount++
+
 			if b.jobs[i].RetryCount < b.jobs[i].MaxRetries {
 				b.jobs[i].Status = "pending"
 			} else {
 				b.jobs[i].Status = "failed"
+				b.dlq = append(b.dlq, b.jobs[i])
+				b.jobs[i] = b.jobs[len(b.jobs) - 1] 
+				b.jobs[len(b.jobs)-1] = nil
+				b.jobs = b.jobs[:len(b.jobs) - 1]
 			}
+
 			return nil
 		}
 	}
@@ -149,6 +155,9 @@ func (b *Broker) FailJob(id string) error {
 	return fmt.Errorf("job not found")
 }
 
-func (b *Broker) GetPerformanceReport() {
+func (b *Broker) GetDLQ() []*Job {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 
+	return b.dlq
 }

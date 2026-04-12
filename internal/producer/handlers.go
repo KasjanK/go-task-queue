@@ -58,3 +58,8 @@ func (s *Server) Metrics(c *gin.Context) {
 	metrics := s.Broker.GetMetrics()
 	c.IndentedJSON(http.StatusOK, metrics)
 }
+
+func (s *Server) GetDLQ(c *gin.Context) {
+	dlq := s.Broker.GetDLQ()
+	c.IndentedJSON(http.StatusOK, dlq)
+}

@@ -48,8 +48,19 @@ func (w *Worker) Run(b *broker.Broker) error {
 
 func (w *Worker) SendEmail(payload map[string]any) error {
 	to := payload["to"]
+	if to == nil {
+		return fmt.Errorf("no recipient")
+	}
+
 	subject := payload["subject"]
+	if subject == nil {
+		subject = "no subject"
+	}
+
 	body := payload["body"]
+	if body == nil {
+		body = "no body"
+	}
 
 	fmt.Printf("[WORKER ID: %v] Sending email to %v, Subject: %v, Body: %v\n", w.ID, to, subject, body)
 	return nil

@@ -29,11 +29,16 @@ func (b *Broker) GetMetrics() Metrics {
 			totalDuration += job.Duration
 		case "pending":
 			m.TasksPending++
-		case "failed":
-			m.TasksFailed++
 		case "in-progress":
 			m.TasksInProgress++
 		}
+
+		m.JobsByType[job.Type]++
+		m.TotalRetries += job.RetryCount
+	}
+
+	for _, job := range b.dlq {
+		m.TasksFailed++
 
 		m.JobsByType[job.Type]++
 		m.TotalRetries += job.RetryCount
@@ -43,7 +48,6 @@ func (b *Broker) GetMetrics() Metrics {
 	m.TotalEnqueued = len(b.jobs)
 
 	if m.TasksCompleted > 0 {
-		// Convert your float64 seconds back to a Duration for the struct
 		m.AvgDuration = (totalDuration / float64(m.TasksCompleted)) * 1000
 	}
 
