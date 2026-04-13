@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -24,26 +25,29 @@ func NewWorker(b *broker.Broker) *Worker {
     }
 }
 
-func (w *Worker) Run(b *broker.Broker) error {
-	for w.IsRunning {
-		job, err := w.Broker.Dequeue()
-		if err != nil {
-			fmt.Println("no jobs found")
-			time.Sleep(1 * time.Second)
-			continue
-		}
-
-		switch job.Type {
-		case "email":
-			err := w.SendEmail(job.Payload)
+func (w *Worker) Run(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			fmt.Printf("Worker %s shutting down...\n", w.ID)
+			return
+		default:
+			job, err := w.Broker.Dequeue()
 			if err != nil {
-			    w.Broker.FailJob(job.ID) 	 // nack
-			} else {
-				w.Broker.CompleteJob(job.ID) // ack
+				continue
+			}
+
+			switch job.Type {
+			case "email":
+				err := w.SendEmail(job.Payload)
+				if err != nil {
+					w.Broker.FailJob(job.ID) 	 // nack
+				} else {
+					w.Broker.CompleteJob(job.ID) // ack
+				}
 			}
 		}
 	}
-	return nil
 }
 
 func (w *Worker) SendEmail(payload map[string]any) error {
@@ -63,5 +67,6 @@ func (w *Worker) SendEmail(payload map[string]any) error {
 	}
 
 	fmt.Printf("[WORKER ID: %v] Sending email to %v, Subject: %v, Body: %v\n", w.ID, to, subject, body)
+	time.Sleep(2 * time.Second)
 	return nil
 }

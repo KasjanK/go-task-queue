@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"fmt"
 	"log"
 
 	"github.com/KasjanK/go-task-queue/internal/broker"
@@ -11,7 +13,6 @@ import (
 
 // TODO:
 // - task performance, memory usage?, error rates
-// - make a separate slice with dead jobs
 // - schedule tasks
 // - dashboard, configuration, worker manager
 // - add real life things to show functionality
@@ -19,13 +20,13 @@ import (
 func main() {
 	broker := broker.NewBroker()
 	server := producer.NewServer(broker)
-	w := worker.NewWorker(broker)
-	w1 := worker.NewWorker(broker)
-	w2 := worker.NewWorker(broker)
+	manager := worker.NewManager(broker)
 
-	go w.Run(broker)
-	go w1.Run(broker)
-	go w2.Run(broker)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	fmt.Println("Starting background worker manager...")
+	manager.Watch(ctx)
 
 	r := gin.Default()
 
@@ -39,5 +40,8 @@ func main() {
 	if err := r.Run(); err != nil {
 		log.Fatalf("failed to run server: %v", err)
 	}
+
+	fmt.Println("shutting down manager")
+	manager.Shutdown()
 }
 
