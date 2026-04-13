@@ -26,6 +26,7 @@ type Broker struct {
 	mu 	sync.Mutex
 	jobs []*Job
 	dlq  []*Job
+	completedJobs []*Job
 }
 
 func NewBroker() *Broker {
@@ -123,6 +124,10 @@ func (b *Broker) CompleteJob(id string) error {
             b.jobs[i].Status = "completed"
 			b.jobs[i].FinishedAt = time.Now()
 			b.jobs[i].Duration = b.jobs[i].FinishedAt.Sub(b.jobs[i].StartedAt).Seconds()
+			b.completedJobs = append(b.completedJobs, b.jobs[i])
+			b.jobs[i] = b.jobs[len(b.jobs) - 1] 
+			b.jobs[len(b.jobs)-1] = nil
+			b.jobs = b.jobs[:len(b.jobs) - 1]
             return nil
         }
     }

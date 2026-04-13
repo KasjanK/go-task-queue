@@ -12,6 +12,7 @@ import (
 )
 
 // TODO:
+// - OPTIMIZE, WORKERS SLOW DOWN WHEN CHECKING METRICS EVERY 5 SEC
 // - task performance, memory usage?, error rates
 // - schedule tasks
 // - dashboard, configuration, worker manager

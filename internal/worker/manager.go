@@ -20,7 +20,7 @@ type Manager struct {
 func NewManager(b *broker.Broker) *Manager {
 	return &Manager{
 		Broker: b,
-		Workers: make(map[string]context.CancelFunc),
+		Workers: map[string]context.CancelFunc{},
 		MaxWorkers: 10,
 		mu: sync.Mutex{},
 	}
@@ -64,19 +64,12 @@ func (m *Manager) Watch(ctx context.Context) {
 			select {
 			case <-ticker.C:
 				metrics := m.Broker.GetMetrics()
-				fmt.Printf("Got metrics, %v\n", metrics)
+				fmt.Printf("Got metrics, %v", metrics)
 				
-				m.mu.Lock()
-				currentWorkerCount := len(m.Workers)
-				m.mu.Unlock()
-
-				if metrics.TasksPending > 10 {
-					for i := 0; i < 5 && currentWorkerCount < m.MaxWorkers; i++ {
-						m.StartWorker()
-						currentWorkerCount++ 
-					}
+				if metrics.TasksPending > 10 && len(m.Workers) < m.MaxWorkers {
+					m.StartWorker()
 				}
-				if metrics.TasksPending == 0 && len(m.Workers) > 1 {
+				if metrics.TasksPending == 0 && len(m.Workers) > 0 {
 					m.StopWorker()
 				}
 			case <-managerCtx.Done():

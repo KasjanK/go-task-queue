@@ -24,9 +24,6 @@ func (b *Broker) GetMetrics() Metrics {
 
 	for _, job := range b.jobs {
 		switch job.Status {
-		case "completed":
-			m.TasksCompleted++	
-			totalDuration += job.Duration
 		case "pending":
 			m.TasksPending++
 		case "in-progress":
@@ -35,6 +32,13 @@ func (b *Broker) GetMetrics() Metrics {
 
 		m.JobsByType[job.Type]++
 		m.TotalRetries += job.RetryCount
+	}
+
+	for _, job := range b.completedJobs {
+		m.TasksCompleted++	
+		totalDuration += job.Duration
+
+		m.JobsByType[job.Type]++
 	}
 
 	for _, job := range b.dlq {

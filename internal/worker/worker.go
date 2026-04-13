@@ -67,6 +67,6 @@ func (w *Worker) SendEmail(payload map[string]any) error {
 	}
 
 	fmt.Printf("[WORKER ID: %v] Sending email to %v, Subject: %v, Body: %v\n", w.ID, to, subject, body)
-	time.Sleep(2 * time.Second)
+//	time.Sleep(2 * time.Second)
 	return nil
 }
