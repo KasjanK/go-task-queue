@@ -63,3 +63,8 @@ func (s *Server) GetDLQ(c *gin.Context) {
 	dlq := s.Broker.GetDLQ()
 	c.IndentedJSON(http.StatusOK, dlq)
 }
+
+func (s *Server) GetCompletedJobs(c *gin.Context) {
+	completedJobs := s.Broker.GetCompletedJobs()
+	c.IndentedJSON(http.StatusOK, completedJobs)
+}

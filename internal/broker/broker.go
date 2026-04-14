@@ -20,6 +20,7 @@ type Job struct {
 	StartedAt  time.Time	  `json:"started_at"`
 	FinishedAt time.Time      `json:"finished_at"`
 	Duration   float64        `json:"duration"`
+	MemoryUsageBytes uint64   `json:"memory_usage_bytes"`
 }
 
 type Broker struct {
@@ -165,4 +166,11 @@ func (b *Broker) GetDLQ() []*Job {
 	defer b.mu.Unlock()
 
 	return b.dlq
+}
+
+func (b *Broker) GetCompletedJobs() []*Job {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	return b.completedJobs
 }
