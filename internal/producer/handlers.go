@@ -45,7 +45,8 @@ func (s *Server) PostJob(c *gin.Context) {
 }
 
 func (s *Server) DequeueJob(c *gin.Context) {
-	job, err := s.Broker.Dequeue()
+	queueName := c.Param("queuename")
+	job, err := s.Broker.Dequeue(queueName)
 	if err != nil {
 		c.IndentedJSON(http.StatusNoContent, gin.H{"message": err.Error()})
 		return
@@ -68,3 +69,4 @@ func (s *Server) GetCompletedJobs(c *gin.Context) {
 	completedJobs := s.Broker.GetCompletedJobs()
 	c.IndentedJSON(http.StatusOK, completedJobs)
 }
+

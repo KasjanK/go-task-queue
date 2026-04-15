@@ -21,7 +21,7 @@ func NewManager(b *broker.Broker) *Manager {
 	return &Manager{
 		Broker: b,
 		Workers: map[string]context.CancelFunc{},
-		MaxWorkers: 10,
+		MaxWorkers: 20,
 		mu: sync.Mutex{},
 	}
 }
@@ -45,7 +45,7 @@ func (m *Manager) StopWorker() {
 	for id, cancel := range m.Workers {
 		cancel()
 		delete(m.Workers, id)
-		fmt.Printf("Worker %v decomissioned", id)
+		fmt.Printf("Worker %v decomissioned\n", id)
 		return
 	}
 }
@@ -64,8 +64,18 @@ func (m *Manager) Watch(ctx context.Context) {
 			select {
 			case <-ticker.C:
 				metrics := m.Broker.GetMetrics()
-				fmt.Printf("Got metrics, %v", metrics)
-				
+				fmt.Printf("Got metrics, %v\n", metrics)
+
+				if len(m.Broker.Queues) > 0 {
+					for key := range m.Broker.Queues {
+						if m.Broker.Queues[key] == nil {
+							continue
+						}
+
+						m.StartWorker()
+					}
+				}
+
 				if metrics.TasksPending > 10 && len(m.Workers) < m.MaxWorkers {
 					m.StartWorker()
 				}

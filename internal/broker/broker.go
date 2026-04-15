@@ -23,15 +23,23 @@ type Job struct {
 	MemoryUsageBytes uint64   `json:"memory_usage_bytes"`
 }
 
-type Broker struct {
-	mu 	sync.Mutex
+type Queue struct {
+	mu 	 sync.Mutex
+	ID   string
 	jobs []*Job
-	dlq  []*Job
+}
+
+type Broker struct {
+	mu 	          sync.Mutex
+	Queues        map[string]*Queue
+	jobs          []*Job
+	dlq           []*Job
 	completedJobs []*Job
 }
 
 func NewBroker() *Broker {
 	return &Broker{
+		Queues: make(map[string]*Queue),
 		jobs: []*Job{
 			{
 				ID:   "seed-1",
@@ -86,24 +94,48 @@ func (b *Broker) GetJob(id string) (*Job, error) {
 	return nil, fmt.Errorf("Job not found")
 }
 
-func (b *Broker) Enqueue(job Job) Job {
+func (b *Broker) Enqueue(job Job) *Job {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	
-	job.ID = uuid.New().String()
-	job.Status = "pending"
-	job.MaxRetries = 3
-	job.EnqueuedAt = time.Now()
-
-	newJob := job
-	b.jobs = append(b.jobs, &newJob)
+	if b.Queues[job.Type] == nil {
+		b.Queues[job.Type] = &Queue{
+			ID: job.Type, 
+			jobs: make([]*Job, 0),
+		}
+	}
 	
-	return job
+	newJob := &Job{
+		ID:         uuid.New().String(),
+        Type:       job.Type,
+        Payload:    job.Payload,
+        Status:     "pending",
+        MaxRetries: 3,
+        EnqueuedAt: time.Now(),
+	}
+
+	queue := b.Queues[job.Type]
+	queue.jobs = append(queue.jobs, newJob)
+
+	fmt.Println(b.Queues["email"])
+	
+	return newJob
 }
 
-func (b *Broker) Dequeue() (*Job, error) {
+func (b *Broker) Dequeue(queueName string) (*Job, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+
+	queue := b.Queues[queueName]
+
+
+	for i := range queue.jobs {
+		if queue.jobs[i].Status == "pending" {
+			queue.jobs[i].Status = "in-progress"
+			queue.jobs[i].StartedAt = time.Now()
+			return queue.jobs[i], nil
+		}
+	}
 
 	for i := range b.jobs {
 		if b.jobs[i].Status == "pending" {

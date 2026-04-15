@@ -15,7 +15,9 @@ import (
 )
 
 // TODO:
-// - task performance, memory usage?, error rates
+// WORKING ON MANAGER DEQUEUE FROM NEW QUEUES
+// - memory usage?, error rates
+// - multiple queues, automatic or user defined? 
 // - schedule tasks
 // - dashboard, configuration
 // - add real life things to show functionality
@@ -44,7 +46,7 @@ func main() {
 	r.GET("/dlq", server.GetDLQ)
 	r.GET("/completed_jobs", server.GetCompletedJobs)
 	r.POST("/jobs", server.PostJob)
-	r.POST("/jobs/dequeue", server.DequeueJob)
+	r.POST("/jobs/dequeue/:queuename", server.DequeueJob)
 
 	if err := r.Run(); err != nil {
 		log.Fatalf("failed to run server: %v", err)
