@@ -17,11 +17,6 @@ func NewServer(b *broker.Broker) *Server {
 	}
 }
 
-func (s *Server) GetJobs(c *gin.Context) {
-	jobs := s.Broker.GetAllJobs()
-	c.IndentedJSON(http.StatusOK, jobs)
-}
-
 func (s *Server) GetJobByID(c *gin.Context) {
 	id := c.Param("id")
 	job, err := s.Broker.GetJob(id)
@@ -70,3 +65,8 @@ func (s *Server) GetCompletedJobs(c *gin.Context) {
 	c.IndentedJSON(http.StatusOK, completedJobs)
 }
 
+func (s *Server) GetQueues(c *gin.Context) {
+    queues := s.Broker.GetAllQueues()
+    
+    c.IndentedJSON(http.StatusOK, queues)
+}

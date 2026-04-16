@@ -26,9 +26,9 @@ func NewManager(b *broker.Broker) *Manager {
 	}
 }
 
-func (m *Manager) StartWorker() {
+func (m *Manager) StartWorker(queueName string) {
 	ctx, cancel := context.WithCancel(context.Background())
-	worker := NewWorker(m.Broker)
+	worker := NewWorker(m.Broker, queueName)
 
 	m.mu.Lock()
 	m.Workers[worker.ID] = cancel
@@ -56,8 +56,6 @@ func (m *Manager) Watch(ctx context.Context) {
 
 	ticker := time.NewTicker(5 * time.Second)
 
-	m.StartWorker()
-
 	go func() {
 		defer ticker.Stop()
 		for {
@@ -68,20 +66,20 @@ func (m *Manager) Watch(ctx context.Context) {
 
 				if len(m.Broker.Queues) > 0 {
 					for key := range m.Broker.Queues {
-						if m.Broker.Queues[key] == nil {
-							continue
+						if m.Broker.GetQueueLength(key) == 0  && len(m.Workers) > 0 {
+							fmt.Printf("QUEUE %v EMPTY, STOPPING WORKERS\n", key)
+							m.StopWorker()
 						}
-
-						m.StartWorker()
+						if metrics.TasksPending > 0 && len(m.Workers) < m.MaxWorkers {
+							m.StartWorker(key)
+						}
 					}
 				}
 
-				if metrics.TasksPending > 10 && len(m.Workers) < m.MaxWorkers {
-					m.StartWorker()
+				if len(m.Broker.Queues) == 0 {
+					fmt.Printf("NO QUEUES FOUND\n")
 				}
-				if metrics.TasksPending == 0 && len(m.Workers) > 0 {
-					m.StopWorker()
-				}
+
 			case <-managerCtx.Done():
 				fmt.Println("Goroutine stopped!") 
 				return 

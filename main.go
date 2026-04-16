@@ -15,9 +15,11 @@ import (
 )
 
 // TODO:
-// WORKING ON MANAGER DEQUEUE FROM NEW QUEUES
+// - deletion of queues
+// - optimize manager and metrics
+// - change stopworker to specific queue instead of random
+// - manager logic to assign workers evenly between queues
 // - memory usage?, error rates
-// - multiple queues, automatic or user defined? 
 // - schedule tasks
 // - dashboard, configuration
 // - add real life things to show functionality
@@ -40,11 +42,12 @@ func main() {
 		http.ListenAndServe("localhost:6060", nil)
 	}()
 
-	r.GET("/jobs", server.GetJobs)
+	//r.GET("/jobs", server.GetJobs)
 	r.GET("/jobs/:id", server.GetJobByID)
 	r.GET("/metrics", server.Metrics)
 	r.GET("/dlq", server.GetDLQ)
 	r.GET("/completed_jobs", server.GetCompletedJobs)
+	r.GET("/queues", server.GetQueues)
 	r.POST("/jobs", server.PostJob)
 	r.POST("/jobs/dequeue/:queuename", server.DequeueJob)
 

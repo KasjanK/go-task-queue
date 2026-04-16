@@ -15,6 +15,7 @@ type Worker struct {
 	Broker    *broker.Broker
 	StartedAt time.Time
 	IsRunning bool
+	QueueName string
 }
 
 type JobStats struct {
@@ -22,12 +23,13 @@ type JobStats struct {
 	MemAllocated uint64 
 }
 
-func NewWorker(b *broker.Broker) *Worker {
+func NewWorker(b *broker.Broker, queueName string) *Worker {
     return &Worker{
         ID:        uuid.New().String(),
         Broker:    b,
         StartedAt: time.Now(),
         IsRunning: true,
+		QueueName: queueName,
     }
 }
 
@@ -39,7 +41,7 @@ func (w *Worker) Run(ctx context.Context) {
 			return
 		default:
 			stats := JobStats{}
-			job, err := w.Broker.Dequeue()
+			job, err := w.Broker.Dequeue(w.QueueName)
 			if err != nil {
 				continue
 			}
@@ -53,9 +55,21 @@ func (w *Worker) Run(ctx context.Context) {
 				stats.MemAllocated = m2.TotalAlloc - m1.TotalAlloc
 				job.MemoryUsageBytes = stats.MemAllocated
 				if err != nil {
-					w.Broker.FailJob(job.ID) 	 // nack
+					w.Broker.FailJob(job.ID, w.QueueName) 	 // nack
 				} else {
-					w.Broker.CompleteJob(job.ID) // ack
+					w.Broker.CompleteJob(job.ID, w.QueueName) // ack
+				}
+			case "resizer":
+				var m1, m2 runtime.MemStats
+				runtime.ReadMemStats(&m1)
+				err := w.ResizeImage(job.Payload)
+				runtime.ReadMemStats(&m2)
+				stats.MemAllocated = m2.TotalAlloc - m1.TotalAlloc
+				job.MemoryUsageBytes = stats.MemAllocated
+				if err != nil {
+					w.Broker.FailJob(job.ID, w.QueueName) 	 // nack
+				} else {
+					w.Broker.CompleteJob(job.ID, w.QueueName) // ack
 				}
 			}
 		}
@@ -63,21 +77,6 @@ func (w *Worker) Run(ctx context.Context) {
 }
 
 func (w *Worker) SendEmail(payload map[string]any) error {
-/*	to := payload["to"]
-	if to == nil {
-		return fmt.Errorf("no recipient")
-	}
-
-	subject := payload["subject"]
-	if subject == nil {
-		subject = "no subject"
-	}
-
-	body := payload["body"]
-	if body == nil {
-		body = "no body"
-	}*/
-
 	dummyBody := make([]byte, 1024 * 1024)
     for i := range dummyBody {
         dummyBody[i] = 'A'
@@ -85,7 +84,16 @@ func (w *Worker) SendEmail(payload map[string]any) error {
     
     fmt.Printf("Sending 1MB email to %s...\n", payload["to"])
 
-	//fmt.Printf("[WORKER ID: %v] Sending email to %v, Subject: %v, Body: %v\n", w.ID, to, subject, body)
-//	time.Sleep(2 * time.Second)
+	return nil
+}
+
+func (w *Worker) ResizeImage(payload map[string]any) error {
+	dummyBody := make([]byte, 1024 * 1024)
+    for i := range dummyBody {
+        dummyBody[i] = 'A'
+    }
+    
+	fmt.Printf("Resizing image..., size: %v\n", payload["size"])
+
 	return nil
 }

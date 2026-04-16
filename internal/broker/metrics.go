@@ -1,5 +1,7 @@
 package broker
 
+import "fmt"
+
 type Metrics struct {
 	TotalProcessed  int  		   `json:"total_processed"`
 	TotalEnqueued   int 		   `json:"total_enqueued"`
@@ -22,14 +24,19 @@ func (b *Broker) GetMetrics() Metrics {
 	m.JobsByType = make(map[string]int)
 	var totalDuration float64
 
-	for _, job := range b.jobs {
+	queue, exists := b.Queues["email"]
+	if !exists {
+		fmt.Println("Nothing queues to fetch")
+		return Metrics{}
+	}
+
+	for _, job := range queue.Jobs {
 		switch job.Status {
 		case "pending":
 			m.TasksPending++
 		case "in-progress":
 			m.TasksInProgress++
 		}
-
 		m.JobsByType[job.Type]++
 		m.TotalRetries += job.RetryCount
 	}
@@ -49,7 +56,7 @@ func (b *Broker) GetMetrics() Metrics {
 	}
 
 	m.TotalProcessed = m.TasksFailed + m.TasksCompleted + m.TasksPending
-	m.TotalEnqueued = len(b.jobs)
+	//m.TotalEnqueued = len(b.Jobs)
 
 	if m.TasksCompleted > 0 {
 		m.AvgDuration = (totalDuration / float64(m.TasksCompleted)) * 1000

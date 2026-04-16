@@ -25,14 +25,13 @@ type Job struct {
 
 type Queue struct {
 	mu 	 sync.Mutex
-	ID   string
-	jobs []*Job
+	ID   string     `json:"id"`
+	Jobs []*Job     `json:"jobs"`
 }
 
 type Broker struct {
 	mu 	          sync.Mutex
-	Queues        map[string]*Queue
-	jobs          []*Job
+	Queues        map[string]*Queue `json:"queues"`
 	dlq           []*Job
 	completedJobs []*Job
 }
@@ -40,58 +39,35 @@ type Broker struct {
 func NewBroker() *Broker {
 	return &Broker{
 		Queues: make(map[string]*Queue),
-		jobs: []*Job{
-			{
-				ID:   "seed-1",
-				Type: "email",
-				Payload: map[string]any{
-				},
-				Status: "pending",
-				MaxRetries: 3,
-				RetryCount: 0,
-				EnqueuedAt: time.Now(),
-			},
-			{
-				ID:   "seed-2",
-				Type: "email",
-				Payload: map[string]any{
-				},
-				Status: "pending",
-				MaxRetries: 3,
-				RetryCount: 0,
-				EnqueuedAt: time.Now(),
-			},
-			{
-				ID:   "seed-3",
-				Type: "email",
-				Payload: map[string]any{
-				},
-				Status: "pending",
-				MaxRetries: 3,
-				RetryCount: 0,
-				EnqueuedAt: time.Now(),
-			},
-		},
 	}
 }
 
-func (b *Broker) GetAllJobs() []*Job {
+func (b *Broker) GetAllQueues() map[string][]*Job {
 	b.mu.Lock()
-	defer b.mu.Unlock()
+    defer b.mu.Unlock()
 
-	return b.jobs
+    snapshot := make(map[string][]*Job)
+    
+    for name, q := range b.Queues {
+        snapshot[name] = q.Jobs
+    }
+    
+    return snapshot
 }
 
 func (b *Broker) GetJob(id string) (*Job, error) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
+    b.mu.Lock()
+    defer b.mu.Unlock()
 
-	for _, job := range b.jobs {
-		if id == job.ID {
-			return job, nil
-		}
-	}
-	return nil, fmt.Errorf("Job not found")
+    for _, q := range b.Queues {
+        for _, job := range q.Jobs {
+            if job.ID == id {
+                return job, nil
+            }
+        }
+    }
+    
+    return nil, fmt.Errorf("job %s not found", id)
 }
 
 func (b *Broker) Enqueue(job Job) *Job {
@@ -101,7 +77,7 @@ func (b *Broker) Enqueue(job Job) *Job {
 	if b.Queues[job.Type] == nil {
 		b.Queues[job.Type] = &Queue{
 			ID: job.Type, 
-			jobs: make([]*Job, 0),
+			Jobs: make([]*Job, 0),
 		}
 	}
 	
@@ -115,7 +91,7 @@ func (b *Broker) Enqueue(job Job) *Job {
 	}
 
 	queue := b.Queues[job.Type]
-	queue.jobs = append(queue.jobs, newJob)
+	queue.Jobs = append(queue.Jobs, newJob)
 
 	fmt.Println(b.Queues["email"])
 	
@@ -128,62 +104,57 @@ func (b *Broker) Dequeue(queueName string) (*Job, error) {
 
 	queue := b.Queues[queueName]
 
-
-	for i := range queue.jobs {
-		if queue.jobs[i].Status == "pending" {
-			queue.jobs[i].Status = "in-progress"
-			queue.jobs[i].StartedAt = time.Now()
-			return queue.jobs[i], nil
+	for i := range queue.Jobs {
+		if queue.Jobs[i].Status == "pending" {
+			queue.Jobs[i].Status = "in-progress"
+			queue.Jobs[i].StartedAt = time.Now()
+			return queue.Jobs[i], nil
 		}
 	}
 
-	for i := range b.jobs {
-		if b.jobs[i].Status == "pending" {
-			b.jobs[i].Status = "in-progress"
-			b.jobs[i].StartedAt = time.Now()
-			return b.jobs[i], nil
-		}
-	}
-
-	return nil, errors.New("no jobs pending")
+	return nil, errors.New("no Jobs pending")
 }
 
-func (b *Broker) CompleteJob(id string) error {
+func (b *Broker) CompleteJob(id, queueName string) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	for i := range b.jobs {
-        if b.jobs[i].ID == id {
-            b.jobs[i].Status = "completed"
-			b.jobs[i].FinishedAt = time.Now()
-			b.jobs[i].Duration = b.jobs[i].FinishedAt.Sub(b.jobs[i].StartedAt).Seconds()
-			b.completedJobs = append(b.completedJobs, b.jobs[i])
-			b.jobs[i] = b.jobs[len(b.jobs) - 1] 
-			b.jobs[len(b.jobs)-1] = nil
-			b.jobs = b.jobs[:len(b.jobs) - 1]
-            return nil
-        }
-    }
+	queue := b.Queues[queueName]
+
+	for i := range queue.Jobs {
+		if queue.Jobs[i].ID == id {
+            queue.Jobs[i].Status = "completed"
+			queue.Jobs[i].FinishedAt = time.Now()
+			queue.Jobs[i].Duration = queue.Jobs[i].FinishedAt.Sub(queue.Jobs[i].StartedAt).Seconds()
+			b.completedJobs = append(b.completedJobs, queue.Jobs[i])
+			queue.Jobs[i] = queue.Jobs[len(queue.Jobs) - 1] 
+			queue.Jobs[len(queue.Jobs)-1] = nil
+			queue.Jobs = queue.Jobs[:len(queue.Jobs) - 1]
+			return nil
+		}
+	}
 
 	return fmt.Errorf("job not found")
 }
 
-func (b *Broker) FailJob(id string) error {
+func (b *Broker) FailJob(id, queueName string) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	for i := range b.jobs {
-		if b.jobs[i].ID == id {
-			b.jobs[i].RetryCount++
+	queue := b.Queues[queueName]
 
-			if b.jobs[i].RetryCount < b.jobs[i].MaxRetries {
-				b.jobs[i].Status = "pending"
+	for i := range queue.Jobs {
+		if queue.Jobs[i].ID == id {
+			queue.Jobs[i].RetryCount++
+
+			if queue.Jobs[i].RetryCount < queue.Jobs[i].MaxRetries {
+				queue.Jobs[i].Status = "pending"
 			} else {
-				b.jobs[i].Status = "failed"
-				b.dlq = append(b.dlq, b.jobs[i])
-				b.jobs[i] = b.jobs[len(b.jobs) - 1] 
-				b.jobs[len(b.jobs)-1] = nil
-				b.jobs = b.jobs[:len(b.jobs) - 1]
+				queue.Jobs[i].Status = "failed"
+				b.dlq = append(b.dlq, queue.Jobs[i])
+				queue.Jobs[i] = queue.Jobs[len(queue.Jobs) - 1] 
+				queue.Jobs[len(queue.Jobs)-1] = nil
+				queue.Jobs = queue.Jobs[:len(queue.Jobs) - 1]
 			}
 
 			return nil
@@ -205,4 +176,15 @@ func (b *Broker) GetCompletedJobs() []*Job {
 	defer b.mu.Unlock()
 
 	return b.completedJobs
+}
+
+func (b *Broker) GetQueueLength(queueName string) int {
+    b.mu.Lock()
+    defer b.mu.Unlock()
+
+    queue, exists := b.Queues[queueName]
+    if !exists {
+        return 0
+    }
+    return len(queue.Jobs)
 }
