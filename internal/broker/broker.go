@@ -32,8 +32,8 @@ type Queue struct {
 type Broker struct {
 	mu 	          sync.Mutex
 	Queues        map[string]*Queue `json:"queues"`
-	dlq           []*Job
-	completedJobs []*Job
+	Dlq           []*Job 			`json:"dlq"`
+	CompletedJobs []*Job			`json:"completed_jobs"`
 }
 
 func NewBroker() *Broker {
@@ -42,17 +42,11 @@ func NewBroker() *Broker {
 	}
 }
 
-func (b *Broker) GetAllQueues() map[string][]*Job {
+func (b *Broker) GetAllQueues() map[string]*Queue {
 	b.mu.Lock()
     defer b.mu.Unlock()
 
-    snapshot := make(map[string][]*Job)
-    
-    for name, q := range b.Queues {
-        snapshot[name] = q.Jobs
-    }
-    
-    return snapshot
+    return b.Queues
 }
 
 func (b *Broker) GetJob(id string) (*Job, error) {
@@ -102,7 +96,10 @@ func (b *Broker) Dequeue(queueName string) (*Job, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	queue := b.Queues[queueName]
+	queue, ok := b.Queues[queueName]
+	if !ok {
+		return nil, fmt.Errorf("Queue not found")
+	}
 
 	for i := range queue.Jobs {
 		if queue.Jobs[i].Status == "pending" {
@@ -119,14 +116,17 @@ func (b *Broker) CompleteJob(id, queueName string) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	queue := b.Queues[queueName]
+	queue, ok := b.Queues[queueName]
+	if !ok {
+		return fmt.Errorf("Queue not found")
+	}
 
 	for i := range queue.Jobs {
 		if queue.Jobs[i].ID == id {
             queue.Jobs[i].Status = "completed"
 			queue.Jobs[i].FinishedAt = time.Now()
 			queue.Jobs[i].Duration = queue.Jobs[i].FinishedAt.Sub(queue.Jobs[i].StartedAt).Seconds()
-			b.completedJobs = append(b.completedJobs, queue.Jobs[i])
+			b.CompletedJobs = append(b.CompletedJobs, queue.Jobs[i])
 			queue.Jobs[i] = queue.Jobs[len(queue.Jobs) - 1] 
 			queue.Jobs[len(queue.Jobs)-1] = nil
 			queue.Jobs = queue.Jobs[:len(queue.Jobs) - 1]
@@ -151,7 +151,7 @@ func (b *Broker) FailJob(id, queueName string) error {
 				queue.Jobs[i].Status = "pending"
 			} else {
 				queue.Jobs[i].Status = "failed"
-				b.dlq = append(b.dlq, queue.Jobs[i])
+				b.Dlq = append(b.Dlq, queue.Jobs[i])
 				queue.Jobs[i] = queue.Jobs[len(queue.Jobs) - 1] 
 				queue.Jobs[len(queue.Jobs)-1] = nil
 				queue.Jobs = queue.Jobs[:len(queue.Jobs) - 1]
@@ -168,14 +168,14 @@ func (b *Broker) GetDLQ() []*Job {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	return b.dlq
+	return b.Dlq
 }
 
 func (b *Broker) GetCompletedJobs() []*Job {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	return b.completedJobs
+	return b.CompletedJobs
 }
 
 func (b *Broker) GetQueueLength(queueName string) int {
@@ -187,4 +187,21 @@ func (b *Broker) GetQueueLength(queueName string) int {
         return 0
     }
     return len(queue.Jobs)
+}
+
+func (b *Broker) DeleteQueue(queueName string) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	_, ok := b.Queues[queueName] 
+	if !ok {
+		return fmt.Errorf("Queue not found")
+	}
+
+	if len(b.Queues[queueName].Jobs) > 0 {
+		return fmt.Errorf("Cannot delete queues while jobs are pending!")
+	}
+
+	delete(b.Queues, queueName)	
+	return nil
 }

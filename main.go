@@ -50,6 +50,7 @@ func main() {
 	r.GET("/queues", server.GetQueues)
 	r.POST("/jobs", server.PostJob)
 	r.POST("/jobs/dequeue/:queuename", server.DequeueJob)
+	r.DELETE("/queues/delete/:queuename", server.DeleteQueue)
 
 	if err := r.Run(); err != nil {
 		log.Fatalf("failed to run server: %v", err)

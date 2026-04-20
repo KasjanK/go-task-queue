@@ -22,7 +22,6 @@ func NewManager(b *broker.Broker) *Manager {
 		Broker: b,
 		Workers: map[string]context.CancelFunc{},
 		MaxWorkers: 20,
-		mu: sync.Mutex{},
 	}
 }
 

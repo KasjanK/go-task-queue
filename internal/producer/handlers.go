@@ -70,3 +70,16 @@ func (s *Server) GetQueues(c *gin.Context) {
     
     c.IndentedJSON(http.StatusOK, queues)
 }
+
+func (s *Server) DeleteQueue(c *gin.Context) {
+	queueName := c.Param("queuename")
+	queues := s.Broker.GetAllQueues()	
+
+	err := s.Broker.DeleteQueue(queueName)
+	if err != nil {
+		c.IndentedJSON(http.StatusNotFound, gin.H{"message": err.Error()})
+		return 
+	}
+
+	c.IndentedJSON(http.StatusOK, queues)
+}

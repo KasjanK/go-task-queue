@@ -41,14 +41,14 @@ func (b *Broker) GetMetrics() Metrics {
 		m.TotalRetries += job.RetryCount
 	}
 
-	for _, job := range b.completedJobs {
+	for _, job := range b.CompletedJobs {
 		m.TasksCompleted++	
 		totalDuration += job.Duration
 
 		m.JobsByType[job.Type]++
 	}
 
-	for _, job := range b.dlq {
+	for _, job := range b.Dlq {
 		m.TasksFailed++
 
 		m.JobsByType[job.Type]++
