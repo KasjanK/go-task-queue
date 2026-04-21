@@ -26,7 +26,7 @@ func (b *Broker) GetMetrics() Metrics {
 
 	queue, exists := b.Queues["email"]
 	if !exists {
-		fmt.Println("Nothing queues to fetch")
+		fmt.Println("No queues to fetch")
 		return Metrics{}
 	}
 

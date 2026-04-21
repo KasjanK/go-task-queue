@@ -83,8 +83,6 @@ func (w *Worker) SendEmail(payload map[string]any) error {
     }
     
     fmt.Printf("Sending 1MB email to %s...\n", payload["to"])
-	time.Sleep(1 * time.Second)
-	fmt.Println("done")
 
 	return nil
 }
@@ -96,8 +94,6 @@ func (w *Worker) ResizeImage(payload map[string]any) error {
     }
     
 	fmt.Printf("Resizing image..., size: %v\n", payload["size"])
-	time.Sleep(1 * time.Second)
-	fmt.Println("done")
 
 	return nil
 }

@@ -15,7 +15,6 @@ import (
 )
 
 // TODO:
-// - deletion of queues
 // - optimize manager and metrics
 // - change stopworker to specific queue instead of random
 // - manager logic to assign workers evenly between queues

@@ -21,7 +21,7 @@ func NewManager(b *broker.Broker) *Manager {
 	return &Manager{
 		Broker: b,
 		Workers: map[string]context.CancelFunc{},
-		MaxWorkers: 20,
+		MaxWorkers: 10,
 	}
 }
 
@@ -40,7 +40,7 @@ func (m *Manager) StartWorker(queueName string) {
 func (m *Manager) StopWorker() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	for id, cancel := range m.Workers {
 		cancel()
 		delete(m.Workers, id)

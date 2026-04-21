@@ -87,8 +87,6 @@ func (b *Broker) Enqueue(job Job) *Job {
 	queue := b.Queues[job.Type]
 	queue.Jobs = append(queue.Jobs, newJob)
 
-	fmt.Println(b.Queues["email"])
-	
 	return newJob
 }
 
