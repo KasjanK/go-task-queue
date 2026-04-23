@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"runtime"
 	"time"
@@ -71,6 +72,18 @@ func (w *Worker) Run(ctx context.Context) {
 				} else {
 					w.Broker.CompleteJob(job.ID, w.QueueName) // ack
 				}
+			case "fail":
+				var m1, m2 runtime.MemStats
+				runtime.ReadMemStats(&m1)
+				err := w.Fail(job.Payload)
+				runtime.ReadMemStats(&m2)
+				stats.MemAllocated = m2.TotalAlloc - m1.TotalAlloc
+				job.MemoryUsageBytes = stats.MemAllocated
+				if err != nil {
+					w.Broker.FailJob(job.ID, w.QueueName) 	 // nack
+				} else {
+					w.Broker.CompleteJob(job.ID, w.QueueName) // ack
+				}
 			}
 		}
 	}
@@ -96,4 +109,15 @@ func (w *Worker) ResizeImage(payload map[string]any) error {
 	fmt.Printf("Resizing image..., size: %v\n", payload["size"])
 
 	return nil
+}
+
+func (w *Worker) Fail(payload map[string]any) error {
+	dummyBody := make([]byte, 1024 * 1024)
+    for i := range dummyBody {
+        dummyBody[i] = 'A'
+    }
+    
+	fmt.Printf("Resizing image..., size: %v\n", payload["size"])
+
+	return errors.New("failed")
 }

@@ -60,7 +60,7 @@ func (m *Manager) Watch(ctx context.Context) {
 		for {
 			select {
 			case <-ticker.C:
-				metrics := m.Broker.GetMetrics()
+				metrics := m.Broker.GetMetricsNew()
 				fmt.Printf("Got metrics, %v\n", metrics)
 
 				if len(m.Broker.Queues) > 0 {

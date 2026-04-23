@@ -51,7 +51,7 @@ func (s *Server) DequeueJob(c *gin.Context) {
 }
 
 func (s *Server) Metrics(c *gin.Context) {
-	metrics := s.Broker.GetMetrics()
+	metrics := s.Broker.GetMetricsNew()
 	c.IndentedJSON(http.StatusOK, metrics)
 }
 
@@ -66,14 +66,14 @@ func (s *Server) GetCompletedJobs(c *gin.Context) {
 }
 
 func (s *Server) GetQueues(c *gin.Context) {
-    queues := s.Broker.GetAllQueues()
+    queues := s.Broker.GetAllJobs()
     
     c.IndentedJSON(http.StatusOK, queues)
 }
 
 func (s *Server) DeleteQueue(c *gin.Context) {
 	queueName := c.Param("queuename")
-	queues := s.Broker.GetAllQueues()	
+	queues := s.Broker.GetAllJobs()	
 
 	err := s.Broker.DeleteQueue(queueName)
 	if err != nil {

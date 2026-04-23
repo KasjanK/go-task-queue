@@ -34,15 +34,23 @@ type Broker struct {
 	Queues        map[string]*Queue `json:"queues"`
 	Dlq           []*Job 			`json:"dlq"`
 	CompletedJobs []*Job			`json:"completed_jobs"`
+	TotalEnqueued int
+	TotalPending  int
+	TasksInProgress int
+	TasksSucceeded int
+	TotalFailed int
+	JobsByType      map[string]int `json:"jobs_by_type"`
+	TotalRetries int
 }
 
 func NewBroker() *Broker {
 	return &Broker{
 		Queues: make(map[string]*Queue),
+		JobsByType: make(map[string]int),
 	}
 }
 
-func (b *Broker) GetAllQueues() map[string]*Queue {
+func (b *Broker) GetAllJobs() map[string]*Queue {
 	b.mu.Lock()
     defer b.mu.Unlock()
 
@@ -60,6 +68,18 @@ func (b *Broker) GetJob(id string) (*Job, error) {
             }
         }
     }
+
+	for _, job := range b.CompletedJobs {
+		if job.ID == id {
+			return job, nil
+		}
+	}
+
+	for _, job := range b.Dlq {
+		if job.ID == id {
+			return job, nil
+		}
+	}
     
     return nil, fmt.Errorf("job %s not found", id)
 }
@@ -86,6 +106,10 @@ func (b *Broker) Enqueue(job Job) *Job {
 
 	queue := b.Queues[job.Type]
 	queue.Jobs = append(queue.Jobs, newJob)
+	
+	b.TotalEnqueued++
+	b.TotalPending++
+	b.JobsByType[job.Type]++
 
 	return newJob
 }
@@ -103,6 +127,9 @@ func (b *Broker) Dequeue(queueName string) (*Job, error) {
 		if queue.Jobs[i].Status == "pending" {
 			queue.Jobs[i].Status = "in-progress"
 			queue.Jobs[i].StartedAt = time.Now()
+
+			b.TasksInProgress++
+			b.TotalPending--
 			return queue.Jobs[i], nil
 		}
 	}
@@ -128,6 +155,9 @@ func (b *Broker) CompleteJob(id, queueName string) error {
 			queue.Jobs[i] = queue.Jobs[len(queue.Jobs) - 1] 
 			queue.Jobs[len(queue.Jobs)-1] = nil
 			queue.Jobs = queue.Jobs[:len(queue.Jobs) - 1]
+
+			b.TasksSucceeded++
+			b.TasksInProgress--
 			return nil
 		}
 	}
@@ -145,14 +175,19 @@ func (b *Broker) FailJob(id, queueName string) error {
 		if queue.Jobs[i].ID == id {
 			queue.Jobs[i].RetryCount++
 
-			if queue.Jobs[i].RetryCount < queue.Jobs[i].MaxRetries {
+			if queue.Jobs[i].RetryCount <= queue.Jobs[i].MaxRetries {
 				queue.Jobs[i].Status = "pending"
+				b.TotalPending++
+				b.TasksInProgress--
+				b.TotalRetries++
 			} else {
 				queue.Jobs[i].Status = "failed"
 				b.Dlq = append(b.Dlq, queue.Jobs[i])
 				queue.Jobs[i] = queue.Jobs[len(queue.Jobs) - 1] 
 				queue.Jobs[len(queue.Jobs)-1] = nil
 				queue.Jobs = queue.Jobs[:len(queue.Jobs) - 1]
+				b.TotalFailed++
+				b.TasksInProgress--
 			}
 
 			return nil
