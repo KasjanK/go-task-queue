@@ -39,17 +39,6 @@ func (s *Server) PostJob(c *gin.Context) {
 	c.IndentedJSON(http.StatusCreated, createdJob)
 }
 
-func (s *Server) DequeueJob(c *gin.Context) {
-	queueName := c.Param("queuename")
-	job, err := s.Broker.Dequeue(queueName)
-	if err != nil {
-		c.IndentedJSON(http.StatusNoContent, gin.H{"message": err.Error()})
-		return
-	}
-
-	c.IndentedJSON(http.StatusOK, job)
-}
-
 func (s *Server) Metrics(c *gin.Context) {
 	metrics := s.Broker.GetMetricsNew()
 	c.IndentedJSON(http.StatusOK, metrics)

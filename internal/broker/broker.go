@@ -1,8 +1,8 @@
 package broker
 
 import (
-	"errors"
 	"fmt"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -20,20 +20,19 @@ type Job struct {
 	StartedAt  time.Time	  `json:"started_at"`
 	FinishedAt time.Time      `json:"finished_at"`
 	Duration   float64        `json:"duration"`
-	MemoryUsageBytes uint64   `json:"memory_usage_bytes"`
 }
 
 type Queue struct {
-	mu 	 sync.Mutex
 	ID   string     `json:"id"`
 	Jobs []*Job     `json:"jobs"`
 }
 
 type Broker struct {
-	mu 	          sync.Mutex
+	Mu 	          sync.RWMutex
 	Queues        map[string]*Queue `json:"queues"`
 	Dlq           []*Job 			`json:"dlq"`
 	CompletedJobs []*Job			`json:"completed_jobs"`
+	jobCh chan *Job
 	TotalEnqueued int
 	TotalPending  int
 	TasksInProgress int
@@ -43,23 +42,28 @@ type Broker struct {
 	TotalRetries int
 }
 
-func NewBroker() *Broker {
+func NewBroker(buffer int) *Broker {
 	return &Broker{
 		Queues: make(map[string]*Queue),
 		JobsByType: make(map[string]int),
+		jobCh: make(chan *Job, buffer),
 	}
 }
 
 func (b *Broker) GetAllJobs() map[string]*Queue {
-	b.mu.Lock()
-    defer b.mu.Unlock()
+	b.Mu.Lock()
+    defer b.Mu.Unlock()
 
     return b.Queues
 }
 
+func (b *Broker) Jobs() <-chan *Job {
+    return b.jobCh
+}
+
 func (b *Broker) GetJob(id string) (*Job, error) {
-    b.mu.Lock()
-    defer b.mu.Unlock()
+    b.Mu.Lock()
+    defer b.Mu.Unlock()
 
     for _, q := range b.Queues {
         for _, job := range q.Jobs {
@@ -85,8 +89,7 @@ func (b *Broker) GetJob(id string) (*Job, error) {
 }
 
 func (b *Broker) Enqueue(job Job) *Job {
-	b.mu.Lock()
-	defer b.mu.Unlock()
+	b.Mu.Lock()
 	
 	if b.Queues[job.Type] == nil {
 		b.Queues[job.Type] = &Queue{
@@ -111,109 +114,112 @@ func (b *Broker) Enqueue(job Job) *Job {
 	b.TotalPending++
 	b.JobsByType[job.Type]++
 
+	b.Mu.Unlock()
+
+	b.jobCh <- newJob
+
 	return newJob
 }
 
-func (b *Broker) Dequeue(queueName string) (*Job, error) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
+func (b *Broker) CompleteJob(job *Job) {
+	b.Mu.Lock()
 
-	queue, ok := b.Queues[queueName]
-	if !ok {
-		return nil, fmt.Errorf("Queue not found")
-	}
+	job.Status = "completed"
+	job.FinishedAt = time.Now()
+	job.Duration = job.FinishedAt.Sub(job.StartedAt).Seconds()
 
-	for i := range queue.Jobs {
-		if queue.Jobs[i].Status == "pending" {
-			queue.Jobs[i].Status = "in-progress"
-			queue.Jobs[i].StartedAt = time.Now()
+	b.removeJobFromQueue(job)
 
-			b.TasksInProgress++
-			b.TotalPending--
-			return queue.Jobs[i], nil
-		}
-	}
+	b.CompletedJobs = append(b.CompletedJobs, job)
+	b.TasksSucceeded++
+	b.TasksInProgress--
 
-	return nil, errors.New("no Jobs pending")
+	b.Mu.Unlock()
 }
 
-func (b *Broker) CompleteJob(id, queueName string) error {
-	b.mu.Lock()
-	defer b.mu.Unlock()
+func (b *Broker) FailJob(job *Job) {
+	b.Mu.Lock()
 
-	queue, ok := b.Queues[queueName]
-	if !ok {
-		return fmt.Errorf("Queue not found")
+	job.RetryCount++
+	job.FinishedAt = time.Now()
+
+	if job.RetryCount >= job.MaxRetries {
+		job.Status = "failed"
+		b.TotalFailed++
+		b.TasksInProgress--
+		
+		b.removeJobFromQueue(job)
+
+		b.Dlq = append(b.Dlq, job)
+		b.Mu.Unlock()
+		return
 	}
 
-	for i := range queue.Jobs {
-		if queue.Jobs[i].ID == id {
-            queue.Jobs[i].Status = "completed"
-			queue.Jobs[i].FinishedAt = time.Now()
-			queue.Jobs[i].Duration = queue.Jobs[i].FinishedAt.Sub(queue.Jobs[i].StartedAt).Seconds()
-			b.CompletedJobs = append(b.CompletedJobs, queue.Jobs[i])
-			queue.Jobs[i] = queue.Jobs[len(queue.Jobs) - 1] 
-			queue.Jobs[len(queue.Jobs)-1] = nil
-			queue.Jobs = queue.Jobs[:len(queue.Jobs) - 1]
-
-			b.TasksSucceeded++
-			b.TasksInProgress--
-			return nil
-		}
-	}
-
-	return fmt.Errorf("job not found")
+	job.Status = "retrying"
+	b.TotalRetries++
+	b.TasksInProgress--
+	b.Mu.Unlock()
+	
+	go b.retryLater(job)
 }
 
-func (b *Broker) FailJob(id, queueName string) error {
-	b.mu.Lock()
-	defer b.mu.Unlock()
+func (b *Broker) retryLater(job *Job) {
+	delay := backoff(job.RetryCount)
 
-	queue := b.Queues[queueName]
+	time.Sleep(delay)
 
-	for i := range queue.Jobs {
-		if queue.Jobs[i].ID == id {
-			queue.Jobs[i].RetryCount++
+	b.Mu.Lock()
 
-			if queue.Jobs[i].RetryCount <= queue.Jobs[i].MaxRetries {
-				queue.Jobs[i].Status = "pending"
-				b.TotalPending++
-				b.TasksInProgress--
-				b.TotalRetries++
-			} else {
-				queue.Jobs[i].Status = "failed"
-				b.Dlq = append(b.Dlq, queue.Jobs[i])
-				queue.Jobs[i] = queue.Jobs[len(queue.Jobs) - 1] 
-				queue.Jobs[len(queue.Jobs)-1] = nil
-				queue.Jobs = queue.Jobs[:len(queue.Jobs) - 1]
-				b.TotalFailed++
-				b.TasksInProgress--
-			}
+	job.Status = "pending"
+	job.EnqueuedAt = time.Now()
 
-			return nil
-		}
-	}
+	b.TotalPending++
 
-	return fmt.Errorf("job not found")
+	b.Mu.Unlock()
+
+	b.jobCh <- job
+}
+
+func backoff(retry int) time.Duration {
+	base := 100 * time.Millisecond
+	jitter := time.Duration(rand.Intn(100)) * time.Millisecond
+	fmt.Println("RETRYING IN ", time.Duration(1<<retry) * base)
+	return time.Duration(1<<retry) * base + jitter
 }
 
 func (b *Broker) GetDLQ() []*Job {
-	b.mu.Lock()
-	defer b.mu.Unlock()
+	b.Mu.Lock()
+	defer b.Mu.Unlock()
 
 	return b.Dlq
 }
 
+func (b *Broker) removeJobFromQueue(job *Job) {
+	queue, ok := b.Queues[job.Type]
+	if !ok {
+		return
+	}
+
+	for i := range queue.Jobs{
+		if queue.Jobs[i] == job {
+			queue.Jobs[i] = queue.Jobs[len(queue.Jobs)-1]
+			queue.Jobs[len(queue.Jobs)-1] = nil
+			queue.Jobs = queue.Jobs[:len(queue.Jobs)-1]
+			return	
+		}
+	}
+}
+
 func (b *Broker) GetCompletedJobs() []*Job {
-	b.mu.Lock()
-	defer b.mu.Unlock()
+	b.Mu.Lock()
+	defer b.Mu.Unlock()
 
 	return b.CompletedJobs
 }
 
 func (b *Broker) GetQueueLength(queueName string) int {
-    b.mu.Lock()
-    defer b.mu.Unlock()
+    b.Mu.Lock()
+    defer b.Mu.Unlock()
 
     queue, exists := b.Queues[queueName]
     if !exists {
@@ -223,8 +229,8 @@ func (b *Broker) GetQueueLength(queueName string) int {
 }
 
 func (b *Broker) DeleteQueue(queueName string) error {
-	b.mu.Lock()
-	defer b.mu.Unlock()
+	b.Mu.Lock()
+	defer b.Mu.Unlock()
 
 	_, ok := b.Queues[queueName] 
 	if !ok {

@@ -2,93 +2,27 @@ package worker
 
 import (
 	"context"
-	"fmt"
-	"sync"
-	"time"
 
 	"github.com/KasjanK/go-task-queue/internal/broker"
 )
 
 type Manager struct {
 	Broker     *broker.Broker
-	Workers    map[string]context.CancelFunc
 	MaxWorkers int
-	mu 		   sync.Mutex
-	cancel 	   context.CancelFunc
 }
 
-func NewManager(b *broker.Broker) *Manager {
+func NewManager(b *broker.Broker, poolSize int) *Manager {
 	return &Manager{
 		Broker: b,
-		Workers: map[string]context.CancelFunc{},
-		MaxWorkers: 10,
+		MaxWorkers: poolSize,
 	}
 }
 
-func (m *Manager) StartWorker(queueName string) {
-	ctx, cancel := context.WithCancel(context.Background())
-	worker := NewWorker(m.Broker, queueName)
-
-	m.mu.Lock()
-	m.Workers[worker.ID] = cancel
-	m.mu.Unlock()
-
-	fmt.Println("Starting worker...")
-	go worker.Run(ctx)
-}
-
-func (m *Manager) StopWorker() {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	for id, cancel := range m.Workers {
-		cancel()
-		delete(m.Workers, id)
-		fmt.Printf("Worker %v decomissioned\n", id)
-		return
-	}
-}
-
-func (m *Manager) Watch(ctx context.Context) {
-	var managerCtx context.Context
-    managerCtx, m.cancel = context.WithCancel(ctx)
-
-	ticker := time.NewTicker(5 * time.Second)
-
-	go func() {
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				metrics := m.Broker.GetMetricsNew()
-				fmt.Printf("Got metrics, %v\n", metrics)
-
-				if len(m.Broker.Queues) > 0 {
-					for key := range m.Broker.Queues {
-						if m.Broker.GetQueueLength(key) == 0  && len(m.Workers) > 0 {
-							fmt.Printf("QUEUE %v EMPTY, STOPPING WORKERS\n", key)
-							m.StopWorker()
-						}
-						if metrics.TasksPending > 0 && len(m.Workers) < m.MaxWorkers {
-							m.StartWorker(key)
-						}
-					}
-				}
-
-				if len(m.Broker.Queues) == 0 {
-					fmt.Printf("NO QUEUES FOUND\n")
-				}
-
-			case <-managerCtx.Done():
-				fmt.Println("Goroutine stopped!") 
-				return 
-			}
-		}
-	}()
-}
-
-func (m *Manager) Shutdown() {
-	if m.cancel != nil {
-		m.cancel()
+func (m *Manager) StartPool(ctx context.Context, handlers map[string]TaskHandler) {
+	jobStream := m.Broker.Jobs()
+	for i := 0; i < m.MaxWorkers; i++ {
+		w := NewWorker(m.Broker)
+		w.Handlers = handlers
+		go w.Run(ctx, jobStream)
 	}
 }
