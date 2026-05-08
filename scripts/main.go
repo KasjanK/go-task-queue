@@ -11,13 +11,13 @@ import (
 func main() {
 	var wg sync.WaitGroup
 
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 1000; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 
 			payload := map[string]any{
-				"type": "fail",
+				"type": "email",
 				"payload": map[string]any{
 					"to": "test@example.com",
 				},
@@ -34,7 +34,7 @@ func main() {
 			}
 		}()
 	}
-	for i := 0; i < 25; i++ {
+	for i := 0; i < 1000; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

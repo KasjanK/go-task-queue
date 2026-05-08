@@ -20,9 +20,11 @@ import (
 )
 
 // TODO:
-// - FailJob
-// - batching or job limiting
-// - memory usage?, error rates
+// - graceful worker drain on shutdown
+// - change dummy task handlers
+// - hardcoded values -> config
+// - log http shutdown error
+// - persistance: db, redis 
 // - schedule tasks
 // - dashboard, configuration
 // - add real life things to show functionality
@@ -70,6 +72,8 @@ func main() {
 
 	fmt.Println("Starting background worker pool...")
 	manager.StartPool(ctx, handlers)
+	broker.StartDispatcher(ctx, 1000)
+	go manager.AutoScale(ctx, handlers)
 
 	r := gin.Default()
 

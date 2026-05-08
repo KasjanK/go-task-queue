@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"sync/atomic"
 	"time"
 
 	"github.com/KasjanK/go-task-queue/internal/broker"
@@ -13,11 +14,7 @@ type Worker struct {
 	Broker    *broker.Broker
 	StartedAt time.Time
 	Handlers  map[string]TaskHandler
-}
-
-type JobStats struct {
-	CPUStartTime int64
-	MemAllocated uint64 
+	Busy 	  atomic.Bool
 }
 
 type TaskHandler func(payload map[string]any) error
@@ -41,13 +38,15 @@ func (w *Worker) Run(ctx context.Context, jobs <-chan *broker.Job) {
 				return
 			}
 
+			w.Busy.Store(true)
+
 			job.StartedAt = time.Now()
 			job.Status = "in-progress"
-			w.Broker.TasksInProgress++
 
 			handler, exists := w.Handlers[job.Type]
 			if !exists {
 				w.Broker.FailJob(job)
+				w.Busy.Store(false)
 				continue
 			}
 			err := handler(job.Payload)
@@ -57,6 +56,7 @@ func (w *Worker) Run(ctx context.Context, jobs <-chan *broker.Job) {
 			} else {
 				w.Broker.CompleteJob(job)
 			}
+			w.Busy.Store(false)
 		}
 	}
 }

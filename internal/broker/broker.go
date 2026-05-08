@@ -1,6 +1,7 @@
 package broker
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"sync"
@@ -28,18 +29,19 @@ type Queue struct {
 }
 
 type Broker struct {
-	Mu 	          sync.RWMutex
-	Queues        map[string]*Queue `json:"queues"`
-	Dlq           []*Job 			`json:"dlq"`
-	CompletedJobs []*Job			`json:"completed_jobs"`
-	jobCh chan *Job
-	TotalEnqueued int
-	TotalPending  int
+	Mu 	            sync.RWMutex
+	Queues          map[string]*Queue `json:"queues"`
+	Dlq             []*Job 			`json:"dlq"`
+	CompletedJobs   []*Job			`json:"completed_jobs"`
+	jobCh 			chan *Job
+	PendingCh       chan *Job
+	TotalEnqueued   int
+	TotalPending    int
 	TasksInProgress int
-	TasksSucceeded int
-	TotalFailed int
+	TasksSucceeded  int
+	TotalFailed     int
 	JobsByType      map[string]int `json:"jobs_by_type"`
-	TotalRetries int
+	TotalRetries    int
 }
 
 func NewBroker(buffer int) *Broker {
@@ -47,12 +49,13 @@ func NewBroker(buffer int) *Broker {
 		Queues: make(map[string]*Queue),
 		JobsByType: make(map[string]int),
 		jobCh: make(chan *Job, buffer),
+		PendingCh: make(chan *Job, buffer),
 	}
 }
 
 func (b *Broker) GetAllJobs() map[string]*Queue {
-	b.Mu.Lock()
-    defer b.Mu.Unlock()
+	b.Mu.RLock()
+    defer b.Mu.RUnlock()
 
     return b.Queues
 }
@@ -62,8 +65,8 @@ func (b *Broker) Jobs() <-chan *Job {
 }
 
 func (b *Broker) GetJob(id string) (*Job, error) {
-    b.Mu.Lock()
-    defer b.Mu.Unlock()
+    b.Mu.RLock()
+    defer b.Mu.RUnlock()
 
     for _, q := range b.Queues {
         for _, job := range q.Jobs {
@@ -116,7 +119,7 @@ func (b *Broker) Enqueue(job Job) *Job {
 
 	b.Mu.Unlock()
 
-	b.jobCh <- newJob
+	b.PendingCh <- newJob
 
 	return newJob
 }
@@ -177,7 +180,7 @@ func (b *Broker) retryLater(job *Job) {
 
 	b.Mu.Unlock()
 
-	b.jobCh <- job
+	b.PendingCh <- job
 }
 
 func backoff(retry int) time.Duration {
@@ -188,10 +191,32 @@ func backoff(retry int) time.Duration {
 }
 
 func (b *Broker) GetDLQ() []*Job {
-	b.Mu.Lock()
-	defer b.Mu.Unlock()
+	b.Mu.RLock()
+	defer b.Mu.RUnlock()
 
 	return b.Dlq
+}
+
+func (b *Broker) StartDispatcher(ctx context.Context, rate int) {
+	ticker := time.NewTicker(time.Second / time.Duration(rate))
+
+	go func() {
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				select {
+				case job := <-b.PendingCh:
+					b.jobCh <- job
+				default:
+					// nothing to dispatch
+				}
+			}
+		}
+	}()
 }
 
 func (b *Broker) removeJobFromQueue(job *Job) {
@@ -211,15 +236,15 @@ func (b *Broker) removeJobFromQueue(job *Job) {
 }
 
 func (b *Broker) GetCompletedJobs() []*Job {
-	b.Mu.Lock()
-	defer b.Mu.Unlock()
+	b.Mu.RLock()
+	defer b.Mu.RUnlock()
 
 	return b.CompletedJobs
 }
 
 func (b *Broker) GetQueueLength(queueName string) int {
-    b.Mu.Lock()
-    defer b.Mu.Unlock()
+    b.Mu.RLock()
+    defer b.Mu.RUnlock()
 
     queue, exists := b.Queues[queueName]
     if !exists {
