@@ -111,3 +111,21 @@ func (m *Manager) AutoScale(ctx context.Context, handlers map[string]TaskHandler
 		}
 	}
 }
+
+func (m *Manager) Wait() {
+	for {
+		allIdle := true
+		m.Mu.Lock()
+		for _, instance := range m.Workers {
+			if instance.Worker.Busy.Load() {
+				allIdle = false
+				break
+			}
+		}
+		m.Mu.Unlock()
+		if allIdle {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+}

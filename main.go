@@ -20,7 +20,6 @@ import (
 )
 
 // TODO:
-// - graceful worker drain on shutdown
 // - change dummy task handlers
 // - hardcoded values -> config
 // - log http shutdown error
@@ -105,6 +104,7 @@ func main() {
 	}()
 
 	<-ctx.Done()
+	manager.Wait()
 	log.Println("Shutting down...")
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
