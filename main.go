@@ -29,29 +29,17 @@ import (
 // - add real life things to show functionality
 
 func sendEmail(payload map[string]any) error {
-	dummyBody := make([]byte, 1024 * 1024)
-    for i := range dummyBody {
-        dummyBody[i] = 'A'
-    }
-    
+    time.Sleep(50 * time.Millisecond) 
 	return nil
 }
 
 func resizeImage(payload map[string]any) error {
-	dummyBody := make([]byte, 1024 * 1024)
-    for i := range dummyBody {
-        dummyBody[i] = 'A'
-    }
-
+    time.Sleep(50 * time.Millisecond) 
 	return nil
 }
 
 func failJob(payload map[string]any) error {
-	dummyBody := make([]byte, 1024 * 1024)
-    for i := range dummyBody {
-        dummyBody[i] = 'A'
-    }
-
+    time.Sleep(50 * time.Millisecond) 
 	return errors.New("failed")
 }
 
