@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/KasjanK/go-task-queue/internal/broker"
+	"github.com/KasjanK/go-task-queue/internal/config"
 )
 
 type WorkerInstance struct {
@@ -19,13 +20,15 @@ type Manager struct {
 	MaxWorkers int
 	Mu 		   sync.Mutex
 	Workers    map[string]*WorkerInstance
+	Config     config.Config
 }
 
-func NewManager(b *broker.Broker, poolSize int) *Manager {
+func NewManager(b *broker.Broker, cfg config.Config) *Manager {
 	return &Manager{
 		Broker: b,
-		MaxWorkers: poolSize,
+		MaxWorkers: cfg.PoolSize,
 		Workers: make(map[string]*WorkerInstance),
+		Config: cfg,
 	}
 }
 
@@ -101,11 +104,9 @@ func (m *Manager) AutoScale(ctx context.Context, handlers map[string]TaskHandler
 			fmt.Printf("queue=%d workers=%d\n", queueLen, workers)
 
 			switch {
-			case queueLen > 5000 && workers < 100:
+			case queueLen > m.Config.ScaleUpThreshold && workers < m.Config.PoolSize:
 				m.ScaleUp(ctx, handlers, 10)
-			case queueLen > 1000 && workers < 50:
-				m.ScaleUp(ctx, handlers, 5)
-			case queueLen < 100 && workers > 10:
+			case queueLen < m.Config.ScaleDownThreshold && workers > m.Config.MinWorkers:
 				m.ScaleDown(2)
 			}
 		}

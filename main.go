@@ -14,16 +14,15 @@ import (
 	_ "net/http/pprof"
 
 	"github.com/KasjanK/go-task-queue/internal/broker"
+	"github.com/KasjanK/go-task-queue/internal/config"
 	"github.com/KasjanK/go-task-queue/internal/producer"
 	"github.com/KasjanK/go-task-queue/internal/worker"
 	"github.com/gin-gonic/gin"
 )
 
 // TODO:
-// - change dummy task handlers
-// - hardcoded values -> config
 // - log http shutdown error
-// - persistance: db, redis 
+// - persistance: db, redis
 // - schedule tasks
 // - dashboard, configuration
 // - add real life things to show functionality
@@ -44,9 +43,18 @@ func failJob(payload map[string]any) error {
 }
 
 func main() {
-	broker := broker.NewBroker(1000)
+	cfg := config.Config{
+		BufferSize: 1000,    // buffersize for the queue
+		PoolSize: 20,        // set worker pool size
+		DispatchRate: 1000,  // a rate at which the dispatcher limits the load
+		ScaleUpThreshold: 5000,
+		ScaleDownThreshold: 100,
+		MinWorkers: 5,
+	}
+
+	broker := broker.NewBroker(cfg.BufferSize)
 	server := producer.NewServer(broker)
-	manager := worker.NewManager(broker, 20)
+	manager := worker.NewManager(broker, cfg)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -59,7 +67,7 @@ func main() {
 
 	fmt.Println("Starting background worker pool...")
 	manager.StartPool(ctx, handlers)
-	broker.StartDispatcher(ctx, 1000)
+	broker.StartDispatcher(ctx, cfg.DispatchRate)
 	go manager.AutoScale(ctx, handlers)
 
 	r := gin.Default()
