@@ -2,12 +2,14 @@ package broker
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 )
 
 type Job struct {
@@ -35,6 +37,7 @@ type Broker struct {
 	CompletedJobs   []*Job			`json:"completed_jobs"`
 	jobCh 			chan *Job
 	PendingCh       chan *Job
+	Redis 		    *redis.Client
 	TotalEnqueued   int
 	TotalPending    int
 	TasksInProgress int
@@ -44,12 +47,13 @@ type Broker struct {
 	TotalRetries    int
 }
 
-func NewBroker(buffer int) *Broker {
+func NewBroker(buffer int, rdb *redis.Client) *Broker {
 	return &Broker{
 		Queues: make(map[string]*Queue),
 		JobsByType: make(map[string]int),
 		jobCh: make(chan *Job, buffer),
 		PendingCh: make(chan *Job, buffer),
+		Redis: rdb,
 	}
 }
 
@@ -91,7 +95,7 @@ func (b *Broker) GetJob(id string) (*Job, error) {
     return nil, fmt.Errorf("job %s not found", id)
 }
 
-func (b *Broker) Enqueue(job Job) *Job {
+func (b *Broker) Enqueue(job Job) (*Job, error) {
 	b.Mu.Lock()
 	
 	if b.Queues[job.Type] == nil {
@@ -119,9 +123,17 @@ func (b *Broker) Enqueue(job Job) *Job {
 
 	b.Mu.Unlock()
 
-	b.PendingCh <- newJob
+	jobJSON, err := json.Marshal(newJob)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal job: %w", err)
+	}
 
-	return newJob
+	err = b.Redis.LPush(context.Background(), "jobs:pending", jobJSON).Err()
+	if err != nil {
+		return nil, fmt.Errorf("failed to push job to redis: %w", err)
+	}
+
+	return newJob, nil
 }
 
 func (b *Broker) CompleteJob(job *Job) {
@@ -180,7 +192,7 @@ func (b *Broker) retryLater(job *Job) {
 
 	b.Mu.Unlock()
 
-	b.PendingCh <- job
+	//b.PendingCh <- job
 }
 
 func backoff(retry int) time.Duration {
@@ -197,23 +209,23 @@ func (b *Broker) GetDLQ() []*Job {
 	return b.Dlq
 }
 
-func (b *Broker) StartDispatcher(ctx context.Context, rate int) {
-	ticker := time.NewTicker(time.Second / time.Duration(rate))
-
+func (b *Broker) StartDispatcher(ctx context.Context) {
 	go func() {
-		defer ticker.Stop()
-
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			case <-ticker.C:
-				select {
-				case job := <-b.PendingCh:
-					b.jobCh <- job
-				default:
-					// nothing to dispatch
+			default:
+				result, err := b.Redis.BRPop(context.Background(), 0, "jobs:pending").Result()
+				if err != nil {
+					continue
 				}
+
+				var job Job
+				if err := json.Unmarshal([]byte(result[1]), &job); err != nil {
+					continue
+				}
+				b.jobCh <- &job
 			}
 		}
 	}()

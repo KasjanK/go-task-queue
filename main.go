@@ -16,16 +16,20 @@ import (
 	"github.com/KasjanK/go-task-queue/internal/broker"
 	"github.com/KasjanK/go-task-queue/internal/config"
 	"github.com/KasjanK/go-task-queue/internal/producer"
+	"github.com/KasjanK/go-task-queue/internal/redisdb"
 	"github.com/KasjanK/go-task-queue/internal/worker"
 	"github.com/gin-gonic/gin"
 )
 
 // TODO:
-// - log http shutdown error
 // - persistance: db, redis
-// - schedule tasks
+// - job priorities
+// - better logging(slog)
+// - job timeouts to not clog workers forever
 // - dashboard, configuration
-// - add real life things to show functionality
+// - tests
+// - docker?
+// - update handlers to showcase a better simulation
 
 func sendEmail(payload map[string]any) error {
     time.Sleep(50 * time.Millisecond) 
@@ -52,7 +56,9 @@ func main() {
 		MinWorkers: 5,
 	}
 
-	broker := broker.NewBroker(cfg.BufferSize)
+	rdb := redisdb.NewClient()
+
+	broker := broker.NewBroker(cfg.BufferSize, rdb)
 	server := producer.NewServer(broker)
 	manager := worker.NewManager(broker, cfg)
 
@@ -67,7 +73,7 @@ func main() {
 
 	fmt.Println("Starting background worker pool...")
 	manager.StartPool(ctx, handlers)
-	broker.StartDispatcher(ctx, cfg.DispatchRate)
+    broker.StartDispatcher(ctx)
 	go manager.AutoScale(ctx, handlers)
 
 	r := gin.Default()

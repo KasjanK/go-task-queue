@@ -1,6 +1,7 @@
 package producer
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/KasjanK/go-task-queue/internal/broker"
@@ -35,7 +36,10 @@ func (s *Server) PostJob(c *gin.Context) {
 		return
 	}
 
-	createdJob := s.Broker.Enqueue(newJob)	
+	createdJob, err := s.Broker.Enqueue(newJob)	
+	if err != nil {
+		fmt.Printf("could not enqueue: %w", err)
+	}
 	c.IndentedJSON(http.StatusCreated, createdJob)
 }
 
