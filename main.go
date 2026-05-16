@@ -22,13 +22,11 @@ import (
 )
 
 // TODO:
-// - persistance: db, redis
 // - job priorities
 // - better logging(slog)
 // - job timeouts to not clog workers forever
 // - dashboard, configuration
 // - tests
-// - docker?
 // - update handlers to showcase a better simulation
 
 func sendEmail(payload map[string]any) error {
@@ -50,7 +48,6 @@ func main() {
 	cfg := config.Config{
 		BufferSize: 1000,    // buffersize for the queue
 		PoolSize: 20,        // set worker pool size
-		DispatchRate: 1000,  // a rate at which the dispatcher limits the load
 		ScaleUpThreshold: 5000,
 		ScaleDownThreshold: 100,
 		MinWorkers: 5,
