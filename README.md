@@ -17,9 +17,9 @@ automatic worker scaling, and retry logic.
 - Docker
 
 ### Running
-\```bash
+```
 docker compose up --build
-\```
+```
 
 ## API Reference
 | Method | Endpoint | Description |
